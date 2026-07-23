@@ -71,6 +71,29 @@
     margin-bottom: 14px;
   }
   #status { min-height: 20px; font-size: 0.9rem; color: #666; }
+  .custom-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .custom-row input {
+    flex: 1;
+    padding: 12px 14px;
+    border: none;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    font-size: 0.95rem;
+  }
+  .custom-row button {
+    padding: 12px 18px;
+    border: none;
+    border-radius: 14px;
+    background: #ff6b9d;
+    color: white;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .custom-row button:disabled { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -96,6 +119,10 @@
         <button class="ping-btn" data-type="love">❤️ Love you</button>
         <button class="ping-btn" data-type="awake">☀️ Good morning</button>
         <button class="ping-btn" data-type="night">🌙 Goodnight</button>
+      </div>
+      <div class="custom-row">
+        <input id="custom-input" type="text" placeholder="Type your own message..." maxlength="200" />
+        <button id="custom-send">Send</button>
       </div>
       <div id="status"></div>
     </div>

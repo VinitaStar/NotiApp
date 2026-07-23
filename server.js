@@ -55,8 +55,10 @@ app.post('/api/subscribe', (req, res) => {
 });
 
 app.post('/api/notify', async (req, res) => {
-  const { from, type } = req.body;
-  if (!PEOPLE.includes(from) || !MESSAGES[type]) {
+  const { from, type, customMessage } = req.body;
+  const trimmedCustom = typeof customMessage === 'string' ? customMessage.trim() : '';
+
+  if (!PEOPLE.includes(from) || (!MESSAGES[type] && !trimmedCustom)) {
     return res.status(400).json({ error: 'invalid payload' });
   }
   const to = PEOPLE.find((p) => p !== from);
@@ -67,9 +69,13 @@ app.post('/api/notify', async (req, res) => {
     return res.status(404).json({ error: `${to} has not enabled notifications yet` });
   }
 
+  const notification = trimmedCustom
+    ? { title: '💬 New message', body: trimmedCustom.slice(0, 200) }
+    : MESSAGES[type];
+
   const payload = JSON.stringify({
-    title: MESSAGES[type].title,
-    body: MESSAGES[type].body,
+    title: notification.title,
+    body: notification.body,
   });
 
   try {

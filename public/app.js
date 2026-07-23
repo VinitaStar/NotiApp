@@ -95,6 +95,39 @@ document.querySelectorAll('.ping-btn').forEach((btn) => {
   });
 });
 
+const customInput = document.getElementById('custom-input');
+const customSendBtn = document.getElementById('custom-send');
+
+async function sendCustomMessage() {
+  const message = customInput.value.trim();
+  if (!person || !message) return;
+  customSendBtn.disabled = true;
+  setStatus('Sending...');
+  try {
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: person, customMessage: message }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus('Sent 💌');
+      customInput.value = '';
+    } else {
+      setStatus(data.error || 'Could not send', true);
+    }
+  } catch (err) {
+    setStatus('Network error, try again', true);
+  } finally {
+    customSendBtn.disabled = false;
+  }
+}
+
+customSendBtn.addEventListener('click', sendCustomMessage);
+customInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendCustomMessage();
+});
+
 if (person) {
   showMainScreen();
 }
