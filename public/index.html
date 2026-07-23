@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Us 💛</title>
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icon.svg" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(160deg, #fff0f5, #ffe3ec);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; color: #333; }
+  p.sub { color: #888; margin-top: 0; margin-bottom: 24px; }
+  .hidden { display: none; }
+  .person-choices {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+  .person-btn {
+    flex: 1;
+    padding: 24px 12px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 18px;
+    background: white;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    cursor: pointer;
+  }
+  #who-am-i { color: #b5537a; font-weight: 600; margin-bottom: 20px; }
+  .ping-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .ping-btn {
+    padding: 22px 10px;
+    font-size: 1.05rem;
+    border: none;
+    border-radius: 18px;
+    background: white;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    cursor: pointer;
+  }
+  .ping-btn:active { transform: scale(0.97); }
+  .ping-btn:disabled { opacity: 0.5; }
+  #enable-notifications {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    background: #ff6b9d;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  #status { min-height: 20px; font-size: 0.9rem; color: #666; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Us 💛</h1>
+    <p class="sub">little pings, across the distance</p>
+
+    <div id="person-screen">
+      <p>Who are you?</p>
+      <div class="person-choices">
+        <button class="person-btn" data-person="me">It's me 💗</button>
+        <button class="person-btn" data-person="bae">It's bae 💛</button>
+      </div>
+    </div>
+
+    <div id="main-screen" class="hidden">
+      <div id="who-am-i"></div>
+      <button id="enable-notifications">🔔 Enable notifications</button>
+      <div class="ping-grid">
+        <button class="ping-btn" data-type="eating">🍽️ Eating</button>
+        <button class="ping-btn" data-type="sleepy">😴 Sleepy</button>
+        <button class="ping-btn" data-type="miss">🥺 Miss you</button>
+        <button class="ping-btn" data-type="love">❤️ Love you</button>
+        <button class="ping-btn" data-type="awake">☀️ Good morning</button>
+        <button class="ping-btn" data-type="night">🌙 Goodnight</button>
+      </div>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
