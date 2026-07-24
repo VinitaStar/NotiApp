@@ -58,17 +58,27 @@ async function registerAndSubscribe() {
     });
   }
 
-  await fetch('/api/subscribe', {
+  const subscribeRes = await fetch('/api/subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ person, subscription }),
   });
 
+  if (!subscribeRes.ok) {
+    setStatus('Could not save your subscription, please try again 😢', true);
+    return;
+  }
+
   setStatus('Notifications enabled! You\'ll get pinged 💌');
   enableBtn.textContent = '✅ Notifications on';
 }
 
-enableBtn.addEventListener('click', registerAndSubscribe);
+enableBtn.addEventListener('click', () => {
+  registerAndSubscribe().catch((err) => {
+    console.error(err);
+    setStatus('Something went wrong enabling notifications, please try again', true);
+  });
+});
 
 document.querySelectorAll('.ping-btn').forEach((btn) => {
   btn.addEventListener('click', async () => {

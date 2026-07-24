@@ -3,9 +3,19 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const webpush = require('web-push');
+const { Redis } = require('@upstash/redis');
 
 const DATA_FILE = path.join(__dirname, 'data', 'subscriptions.json');
 const PEOPLE = ['me', 'bae'];
+const SUBS_KEY = 'us-app:subscriptions';
+
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : null;
 
 const MESSAGES = {
   eating: { title: '🍽️ Eating', body: 'is eating right now' },
@@ -22,7 +32,11 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-function loadSubscriptions() {
+async function loadSubscriptions() {
+  if (redis) {
+    const subs = await redis.get(SUBS_KEY);
+    return subs || {};
+  }
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   } catch {
@@ -30,7 +44,11 @@ function loadSubscriptions() {
   }
 }
 
-function saveSubscriptions(subs) {
+async function saveSubscriptions(subs) {
+  if (redis) {
+    await redis.set(SUBS_KEY, subs);
+    return;
+  }
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   fs.writeFileSync(DATA_FILE, JSON.stringify(subs, null, 2));
 }
@@ -43,15 +61,20 @@ app.get('/api/vapid-public-key', (req, res) => {
   res.send(process.env.VAPID_PUBLIC_KEY);
 });
 
-app.post('/api/subscribe', (req, res) => {
+app.post('/api/subscribe', async (req, res) => {
   const { person, subscription } = req.body;
   if (!PEOPLE.includes(person) || !subscription) {
     return res.status(400).json({ error: 'invalid payload' });
   }
-  const subs = loadSubscriptions();
-  subs[person] = subscription;
-  saveSubscriptions(subs);
-  res.json({ ok: true });
+  try {
+    const subs = await loadSubscriptions();
+    subs[person] = subscription;
+    await saveSubscriptions(subs);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to save subscription:', err.message);
+    res.status(500).json({ error: 'failed to save subscription' });
+  }
 });
 
 app.post('/api/notify', async (req, res) => {
@@ -62,7 +85,7 @@ app.post('/api/notify', async (req, res) => {
     return res.status(400).json({ error: 'invalid payload' });
   }
   const to = PEOPLE.find((p) => p !== from);
-  const subs = loadSubscriptions();
+  const subs = await loadSubscriptions();
   const targetSub = subs[to];
 
   if (!targetSub) {
@@ -85,7 +108,7 @@ app.post('/api/notify', async (req, res) => {
     console.error('Push failed:', err.message);
     if (err.statusCode === 404 || err.statusCode === 410) {
       delete subs[to];
-      saveSubscriptions(subs);
+      await saveSubscriptions(subs);
     }
     res.status(500).json({ error: 'failed to send notification' });
   }
