@@ -226,27 +226,31 @@ function formatElapsed(fromDate) {
   const hours = Math.floor((totalSecs % 86400) / 3600);
   const mins = Math.floor((totalSecs % 3600) / 60);
   const secs = totalSecs % 60;
-  return `${days}d ${hours}h ${mins}m ${secs}s ago`;
+  return { days, hours, mins, secs };
 }
 
-const HEART_EMOJIS = ['💛', '❤️', '💕', '💖', '💗'];
+const FLOAT_EMOJIS = ['💛', '❤️', '💕', '💖', '💗', '✨', '💫'];
 
 function createHearts() {
   const container = document.getElementById('hearts-bg');
   if (!container || container.childElementCount > 0) return;
-  const count = 20;
+  const count = 24;
   for (let i = 0; i < count; i++) {
     const heart = document.createElement('span');
     heart.className = 'heart';
-    heart.textContent = HEART_EMOJIS[Math.floor(Math.random() * HEART_EMOJIS.length)];
+    heart.textContent = FLOAT_EMOJIS[Math.floor(Math.random() * FLOAT_EMOJIS.length)];
     const left = Math.random() * 100;
-    const duration = 8 + Math.random() * 10;
-    const delay = Math.random() * 12;
-    const size = 14 + Math.random() * 16;
+    const duration = 9 + Math.random() * 12;
+    const delay = Math.random() * 16;
+    const size = 12 + Math.random() * 20;
+    const drift = Math.round((Math.random() - 0.5) * 2 * 80);
+    const rotate = Math.round((Math.random() - 0.5) * 2 * 360);
     heart.style.left = `${left}%`;
     heart.style.fontSize = `${size}px`;
     heart.style.animationDuration = `${duration}s`;
     heart.style.animationDelay = `-${delay}s`;
+    heart.style.setProperty('--drift', `${drift}px`);
+    heart.style.setProperty('--rotate', `${rotate}deg`);
     container.appendChild(heart);
   }
 }
@@ -295,7 +299,10 @@ async function renderDates() {
 function updateDateCounters() {
   document.querySelectorAll('.date-card').forEach((card) => {
     const d = new Date(card.dataset.date);
-    card.querySelector('.counter').textContent = formatElapsed(d);
+    const { days, hours, mins, secs } = formatElapsed(d);
+    card.querySelector('.counter').innerHTML =
+      `<span class="days-big">${days}</span><span class="days-label">days</span>` +
+      `<span class="sub-time">${hours}h ${mins}m ${secs}s</span>`;
   });
 }
 

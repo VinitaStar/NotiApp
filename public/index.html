@@ -147,7 +147,18 @@
     border-radius: 50%;
   }
   .date-card .label { font-weight: 600; color: #333; font-family: 'Poppins', sans-serif; }
-  .date-card .counter { color: #b5537a; font-size: 0.85rem; margin-top: 4px; font-weight: 500; }
+  .date-card .counter { margin-top: 4px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; }
+  .date-card .days-big {
+    font-size: 1.7rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, #ff6b9d, #b5537a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    line-height: 1;
+  }
+  .date-card .days-label { font-size: 0.72rem; color: #b5537a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .date-card .sub-time { font-size: 0.72rem; color: #a5828f; width: 100%; }
   .date-card .date { font-size: 0.72rem; color: #999; margin-top: 2px; }
 
   .stack-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
@@ -213,15 +224,19 @@
     position: absolute;
     top: -10%;
     animation-name: heart-fall;
-    animation-timing-function: linear;
+    animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
+    filter: drop-shadow(0 2px 4px rgba(181, 83, 122, 0.15));
   }
   #dates-list { position: relative; z-index: 1; }
   @keyframes heart-fall {
-    0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
-    10% { opacity: 0.85; }
-    90% { opacity: 0.5; }
-    100% { transform: translateY(110vh) rotate(25deg); opacity: 0; }
+    0% { transform: translate(0, -10vh) rotate(0deg) scale(0.7); opacity: 0; }
+    12% { opacity: 0.9; }
+    30% { transform: translate(var(--drift), 25vh) rotate(calc(var(--rotate) * 0.3)) scale(1.05); }
+    50% { transform: translate(calc(var(--drift) * -0.6), 50vh) rotate(calc(var(--rotate) * 0.6)) scale(0.9); }
+    70% { transform: translate(var(--drift), 75vh) rotate(calc(var(--rotate) * 0.85)) scale(1.1); }
+    88% { opacity: 0.6; }
+    100% { transform: translate(0, 110vh) rotate(var(--rotate)) scale(0.8); opacity: 0; }
   }
 </style>
 </head>
