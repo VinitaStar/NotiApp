@@ -6,6 +6,9 @@
 <title>Us 💛</title>
 <link rel="manifest" href="/manifest.json" />
 <link rel="icon" href="/icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
   * { box-sizing: border-box; }
   body {
@@ -114,8 +117,37 @@
   }
   .item-card .meta { font-size: 0.72rem; color: #999; margin-top: 6px; }
 
-  .date-card .label { font-weight: 600; color: #333; }
-  .date-card .counter { color: #b5537a; font-size: 0.85rem; margin-top: 4px; }
+  .dates-header { text-align: center; margin-bottom: 18px; }
+  .dates-header h2 {
+    font-family: 'Dancing Script', cursive;
+    font-size: 2.4rem;
+    margin: 0;
+    background: linear-gradient(90deg, #ff6b9d, #b5537a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dates-header p { color: #a97b8f; font-size: 0.85rem; margin: 2px 0 0; font-style: italic; }
+  .date-card {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: linear-gradient(135deg, #ffffff, #fff5f8);
+    border: 1px solid rgba(255, 107, 157, 0.15);
+  }
+  .date-card .icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 107, 157, 0.12);
+    border-radius: 50%;
+  }
+  .date-card .label { font-weight: 600; color: #333; font-family: 'Poppins', sans-serif; }
+  .date-card .counter { color: #b5537a; font-size: 0.85rem; margin-top: 4px; font-weight: 500; }
   .date-card .date { font-size: 0.72rem; color: #999; margin-top: 2px; }
 
   .stack-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
@@ -124,9 +156,25 @@
   .question-card .q { font-weight: 600; color: #333; }
   .question-card .q-meta { font-size: 0.72rem; color: #999; margin-top: 2px; }
   .question-card .a { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eee; color: #555; }
+  .question-card .q-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
   .answer-form { display: flex; gap: 6px; margin-top: 8px; }
   .answer-form input { flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid #eee; font-family: inherit; }
   .answer-form button { padding: 8px 12px; border: none; border-radius: 10px; background: #ff6b9d; color: white; cursor: pointer; }
+  .del-icon-btn { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; opacity: 0.6; }
+  .del-icon-btn:hover { opacity: 1; }
+
+  .folder-row { display: flex; gap: 8px; }
+  .secondary-btn {
+    padding: 12px 14px;
+    border: none;
+    border-radius: 14px;
+    background: white;
+    color: #ff6b9d;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    font-size: 0.9rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
 
   .folder-block { margin-bottom: 18px; }
   .folder-title { font-weight: 700; color: #b5537a; margin-bottom: 8px; font-size: 0.95rem; }
@@ -141,6 +189,7 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     gap: 8px;
   }
+  .link-item .link-info { overflow: hidden; }
   .link-item a {
     color: #333;
     text-decoration: none;
@@ -148,8 +197,32 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block;
   }
-  .link-item .del-btn { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; }
+  .link-item .meta { font-size: 0.7rem; color: #999; margin-top: 2px; }
+
+  #tab-dates { position: relative; }
+  .hearts-bg {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hearts-bg .heart {
+    position: absolute;
+    top: -10%;
+    animation-name: heart-fall;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  #dates-list { position: relative; z-index: 1; }
+  @keyframes heart-fall {
+    0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.85; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(110vh) rotate(25deg); opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -197,6 +270,11 @@
       </div>
 
       <div id="tab-dates" class="tab-content">
+        <div id="hearts-bg" class="hearts-bg"></div>
+        <div class="dates-header">
+          <h2>Vinita &amp; Sharvin</h2>
+          <p>every second of us, counted</p>
+        </div>
         <div id="dates-list"></div>
       </div>
 
@@ -210,8 +288,11 @@
 
       <div id="tab-places" class="tab-content">
         <div class="stack-form">
-          <input id="place-folder" class="text-input" list="folder-options" placeholder="Folder (e.g. Eat, Visit)" maxlength="40" />
-          <datalist id="folder-options"></datalist>
+          <div class="folder-row">
+            <input id="place-folder" class="text-input" list="folder-options" placeholder="Folder (e.g. Eat, Visit)" maxlength="40" />
+            <datalist id="folder-options"></datalist>
+            <button id="folder-create" class="secondary-btn" type="button">+ Folder</button>
+          </div>
           <input id="place-title" class="text-input" placeholder="Name (optional)" maxlength="100" />
           <input id="place-url" class="text-input" placeholder="Paste link here" />
           <button id="place-send" class="primary-btn">Add place</button>

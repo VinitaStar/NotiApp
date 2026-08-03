@@ -263,6 +263,18 @@ app.post('/api/questions/:id/answer', async (req, res) => {
   }
 });
 
+app.delete('/api/questions/:id', async (req, res) => {
+  try {
+    const questions = await loadData(QUESTIONS_KEY, []);
+    const filtered = questions.filter((item) => item.id !== req.params.id);
+    await saveData(QUESTIONS_KEY, filtered);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete question:', err.message);
+    res.status(500).json({ error: 'failed to delete question' });
+  }
+});
+
 app.get('/api/places', async (req, res) => {
   try {
     res.json(await loadData(PLACES_KEY, {}));
@@ -272,10 +284,28 @@ app.get('/api/places', async (req, res) => {
   }
 });
 
+app.post('/api/places/folders', async (req, res) => {
+  const { folder } = req.body;
+  const name = typeof folder === 'string' ? folder.trim().slice(0, 40) : '';
+  if (!name) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const places = await loadData(PLACES_KEY, {});
+    if (!places[name]) places[name] = [];
+    await saveData(PLACES_KEY, places);
+    res.json({ ok: true, places });
+  } catch (err) {
+    console.error('Failed to create folder:', err.message);
+    res.status(500).json({ error: 'failed to create folder' });
+  }
+});
+
 app.post('/api/places/links', async (req, res) => {
   const { from, folder, url, title } = req.body;
-  const folderName = typeof folder === 'string' ? folder.trim() : '';
-  const link = typeof url === 'string' ? url.trim() : '';
+  const folderName = typeof folder === 'string' ? folder.trim().slice(0, 40) : '';
+  let link = typeof url === 'string' ? url.trim() : '';
+  if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
   if (!PEOPLE.includes(from) || !folderName || !link) {
     return res.status(400).json({ error: 'invalid payload' });
   }

@@ -221,15 +221,56 @@ async function loadMilestones() {
 
 function formatElapsed(fromDate) {
   const diff = Date.now() - fromDate.getTime();
-  const totalMins = Math.floor(diff / 60000);
-  const days = Math.floor(totalMins / (60 * 24));
-  const hours = Math.floor((totalMins % (60 * 24)) / 60);
-  const mins = totalMins % 60;
-  return `${days}d ${hours}h ${mins}m ago`;
+  const totalSecs = Math.floor(diff / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  return `${days}d ${hours}h ${mins}m ${secs}s ago`;
+}
+
+const HEART_EMOJIS = ['💛', '❤️', '💕', '💖', '💗'];
+
+function createHearts() {
+  const container = document.getElementById('hearts-bg');
+  if (!container || container.childElementCount > 0) return;
+  const count = 20;
+  for (let i = 0; i < count; i++) {
+    const heart = document.createElement('span');
+    heart.className = 'heart';
+    heart.textContent = HEART_EMOJIS[Math.floor(Math.random() * HEART_EMOJIS.length)];
+    const left = Math.random() * 100;
+    const duration = 8 + Math.random() * 10;
+    const delay = Math.random() * 12;
+    const size = 14 + Math.random() * 16;
+    heart.style.left = `${left}%`;
+    heart.style.fontSize = `${size}px`;
+    heart.style.animationDuration = `${duration}s`;
+    heart.style.animationDelay = `-${delay}s`;
+    container.appendChild(heart);
+  }
+}
+
+const MILESTONE_ICONS = [
+  { match: /insta/i, icon: '📸' },
+  { match: /confess/i, icon: '💌' },
+  { match: /meet/i, icon: '🤝' },
+  { match: /pic/i, icon: '🖼️' },
+  { match: /accept/i, icon: '💍' },
+  { match: /outing/i, icon: '🌆' },
+  { match: /kiss/i, icon: '😘' },
+  { match: /naked/i, icon: '🌙' },
+  { match: /sleep/i, icon: '🛌' },
+];
+
+function iconFor(label) {
+  const found = MILESTONE_ICONS.find((m) => m.match.test(label));
+  return found ? found.icon : '💛';
 }
 
 async function renderDates() {
   const listEl = document.getElementById('dates-list');
+  createHearts();
   if (!milestones.length) {
     listEl.innerHTML = '<div class="empty-note">Loading...</div>';
     await loadMilestones();
@@ -238,14 +279,17 @@ async function renderDates() {
     .slice()
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .map((m) => `<div class="item-card date-card" data-date="${m.date}">
-      <div class="label">${escapeHtml(m.label)}</div>
-      <div class="counter"></div>
-      <div class="date">${new Date(m.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      <div class="icon">${iconFor(m.label)}</div>
+      <div>
+        <div class="label">${escapeHtml(m.label)}</div>
+        <div class="counter"></div>
+        <div class="date">${new Date(m.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      </div>
     </div>`)
     .join('');
   updateDateCounters();
   if (datesInterval) clearInterval(datesInterval);
-  datesInterval = setInterval(updateDateCounters, 60000);
+  datesInterval = setInterval(updateDateCounters, 1000);
 }
 
 function updateDateCounters() {
@@ -297,6 +341,17 @@ async function loadQuestions() {
     }
     listEl.innerHTML = questions.map(renderQuestionCard).join('');
 
+    listEl.querySelectorAll('.del-icon-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await fetch(`/api/questions/${btn.dataset.id}`, { method: 'DELETE' });
+          loadQuestions();
+        } catch (err) {
+          setStatus('Could not delete that question', true);
+        }
+      });
+    });
+
     listEl.querySelectorAll('.answer-form').forEach((form) => {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -334,8 +389,13 @@ function renderQuestionCard(q) {
   const askerLabel = q.askedBy === 'me' ? 'Me' : 'Bae';
   const canAnswer = !q.answer && q.askedBy !== person;
   let html = `<div class="item-card question-card">
-    <div class="q">${escapeHtml(q.question)}</div>
-    <div class="q-meta">asked by ${askerLabel} · ${timeAgo(q.askedAt)}</div>`;
+    <div class="q-row">
+      <div>
+        <div class="q">${escapeHtml(q.question)}</div>
+        <div class="q-meta">asked by ${askerLabel} · ${timeAgo(q.askedAt)}</div>
+      </div>
+      <button class="del-icon-btn" data-id="${q.id}" title="Delete">✕</button>
+    </div>`;
 
   if (q.answer) {
     const answererLabel = q.answeredBy === 'me' ? 'Me' : 'Bae';
@@ -359,6 +419,34 @@ const placeFolderInput = document.getElementById('place-folder');
 const placeTitleInput = document.getElementById('place-title');
 const placeUrlInput = document.getElementById('place-url');
 const placeSendBtn = document.getElementById('place-send');
+const folderCreateBtn = document.getElementById('folder-create');
+
+folderCreateBtn.addEventListener('click', async () => {
+  const folder = placeFolderInput.value.trim();
+  if (!folder) {
+    setStatus('Type a folder name first', true);
+    return;
+  }
+  folderCreateBtn.disabled = true;
+  try {
+    const res = await fetch('/api/places/folders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder }),
+    });
+    if (res.ok) {
+      setStatus(`Folder "${folder}" ready 📁`);
+      loadPlaces();
+    } else {
+      const data = await res.json();
+      setStatus(data.error || 'Could not create folder', true);
+    }
+  } catch (err) {
+    setStatus('Network error, try again', true);
+  } finally {
+    folderCreateBtn.disabled = false;
+  }
+});
 
 placeSendBtn.addEventListener('click', async () => {
   const folder = placeFolderInput.value.trim();
@@ -403,24 +491,29 @@ async function loadPlaces() {
     folderOptions.innerHTML = folders.map((f) => `<option value="${escapeHtml(f)}"></option>`).join('');
 
     if (!folders.length) {
-      listEl.innerHTML = '<div class="empty-note">No places saved yet</div>';
+      listEl.innerHTML = '<div class="empty-note">No folders yet — create one above</div>';
       return;
     }
 
     listEl.innerHTML = folders
       .map((folder) => {
         const links = places[folder];
-        if (!links.length) return '';
-        const linkItems = links
-          .map(
-            (l) => `<div class="link-item">
-              <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.title)}</a>
-              <button class="del-btn" data-folder="${escapeHtml(folder)}" data-id="${l.id}">✕</button>
-            </div>`
-          )
-          .join('');
+        const linkItems = links.length
+          ? links
+              .map((l) => {
+                const addedByLabel = l.addedBy === 'me' ? 'Me' : 'Bae';
+                return `<div class="link-item">
+                  <div class="link-info">
+                    <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.title)}</a>
+                    <div class="meta">added by ${addedByLabel} · ${timeAgo(l.addedAt)}</div>
+                  </div>
+                  <button class="del-btn" data-folder="${escapeHtml(folder)}" data-id="${l.id}">✕</button>
+                </div>`;
+              })
+              .join('')
+          : '<div class="empty-note">No links in this folder yet</div>';
         return `<div class="folder-block">
-          <div class="folder-title">${escapeHtml(folder)}</div>
+          <div class="folder-title">📁 ${escapeHtml(folder)}</div>
           ${linkItems}
         </div>`;
       })
