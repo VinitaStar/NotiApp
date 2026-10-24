@@ -84,6 +84,7 @@ function showMainScreen() {
   personScreen.classList.add('hidden');
   mainScreen.classList.remove('hidden');
   whoAmILabel.textContent = `${person === 'me' ? '💗' : '💛'} ${nameOf(person)}`;
+  document.getElementById('chat-input').placeholder = `Message ${nameOf(person === 'me' ? 'bae' : 'me')}...`;
 }
 
 document.querySelectorAll('.person-btn').forEach((btn) => {
@@ -211,6 +212,7 @@ function createHearts() {
 /* ---------- Tabs ---------- */
 
 const tabLoaders = {
+  chat: openChat,
   history: loadHistory,
   dates: renderDates,
   ask: loadQuestions,
@@ -223,6 +225,8 @@ function showTab(name) {
   document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach((c) => c.classList.toggle('active', c.id === `tab-${name}`));
   heartsEl.classList.toggle('visible', name === 'dates' || name === 'meet');
+  document.body.classList.toggle('chat-open', name === 'chat');
+  if (name !== 'chat') stopChatPolling();
   window.scrollTo({ top: 0 });
   if (tabLoaders[name]) tabLoaders[name]();
 }
@@ -323,6 +327,169 @@ customSendBtn.addEventListener('click', sendCustomMessage);
 customInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendCustomMessage();
 });
+
+/* ---------- Chat ---------- */
+
+const chatListEl = document.getElementById('chat-list');
+const chatInput = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send');
+const chatBadge = document.getElementById('chat-badge');
+
+const CHAT_POLL_MS = 5000;
+const UNREAD_POLL_MS = 20000;
+
+let chatMessages = [];
+let chatVersion = null;
+let chatTimer = null;
+let chatBusy = false;
+
+function dayLabel(ms) {
+  const d = new Date(ms);
+  if (d.toDateString() === new Date().toDateString()) return 'Today';
+  if (d.toDateString() === new Date(Date.now() - DAY_MS).toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function clockTime(ms) {
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function chatMessageHtml(m) {
+  const mine = m.from === person;
+  const status = mine ? (m.seenAt ? ' <span class="seen">✓✓ Seen</span>' : ' <span>✓</span>') : '';
+  const del = mine ? `<button class="chat-del" data-action="delete-chat" data-id="${m.id}">Delete</button>` : '';
+  return `<div class="chat-msg ${mine ? 'mine' : 'theirs'}">
+    <div class="chat-bubble">${escapeHtml(m.text)}</div>
+    <div class="chat-meta"><span>${clockTime(m.at)}</span>${status}${del}</div>
+  </div>`;
+}
+
+function renderChat(scrollToEnd) {
+  if (!chatMessages.length) {
+    chatListEl.innerHTML = `<div class="empty-note">No messages yet. Say hi to ${escapeHtml(nameOf(otherPerson()))} 💛</div>`;
+    return;
+  }
+  const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 160;
+  let lastDay = '';
+  chatListEl.innerHTML = chatMessages
+    .map((m) => {
+      const day = dayLabel(m.at);
+      const separator = day !== lastDay ? `<div class="chat-day">${day}</div>` : '';
+      lastDay = day;
+      return separator + chatMessageHtml(m);
+    })
+    .join('');
+  if (scrollToEnd || nearBottom) window.scrollTo({ top: document.body.scrollHeight });
+}
+
+function otherPerson() {
+  return person === 'me' ? 'bae' : 'me';
+}
+
+function setChatBadge(count) {
+  chatBadge.textContent = count > 99 ? '99+' : String(count);
+  chatBadge.classList.toggle('hidden', !count);
+}
+
+async function markChatSeen() {
+  if (currentTab !== 'chat' || document.visibilityState !== 'visible') return;
+  if (!chatMessages.some((m) => m.from !== person && !m.seenAt)) return;
+  try {
+    await api('/api/chat/seen', 'POST', { person });
+    chatMessages.forEach((m) => {
+      if (m.from !== person && !m.seenAt) m.seenAt = Date.now();
+    });
+  } catch {
+    // the next poll will try again
+  }
+}
+
+async function fetchChat() {
+  if (!person || chatBusy || document.visibilityState !== 'visible') return;
+  chatBusy = true;
+  try {
+    const data = await api(`/api/chat?v=${chatVersion ?? ''}`);
+    if (data.unchanged) return;
+    const firstLoad = chatVersion === null;
+    chatVersion = data.v;
+    chatMessages = data.messages;
+    renderChat(firstLoad);
+    setChatBadge(0);
+    markChatSeen();
+  } catch (err) {
+    if (chatVersion === null) chatListEl.innerHTML = '<div class="empty-note">Could not load the chat</div>';
+  } finally {
+    chatBusy = false;
+  }
+}
+
+async function checkUnread() {
+  if (!person || currentTab === 'chat' || document.visibilityState !== 'visible') return;
+  try {
+    const data = await api(`/api/chat/unread?person=${person}`);
+    setChatBadge(data.count);
+  } catch {
+    // keep the old badge
+  }
+}
+
+function startChatPolling() {
+  stopChatPolling();
+  chatTimer = setInterval(fetchChat, CHAT_POLL_MS);
+}
+
+function stopChatPolling() {
+  clearInterval(chatTimer);
+  chatTimer = null;
+}
+
+function openChat() {
+  startChatPolling();
+  fetchChat();
+}
+
+async function sendChat() {
+  const text = chatInput.value.trim();
+  if (!person || !text) return;
+  chatSendBtn.disabled = true;
+  try {
+    const data = await api('/api/chat', 'POST', { from: person, text });
+    chatInput.value = '';
+    chatMessages.push(data.message);
+    renderChat(true);
+    fetchChat();
+  } catch (err) {
+    setStatus(err.message, true);
+  } finally {
+    chatSendBtn.disabled = false;
+    chatInput.focus();
+  }
+}
+
+chatSendBtn.addEventListener('click', sendChat);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChat();
+});
+
+chatListEl.addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-action="delete-chat"]');
+  if (del) {
+    if (!confirm('Delete this message for both of you?')) return;
+    try {
+      await api(`/api/chat/${del.dataset.id}?from=${person}`, 'DELETE');
+      chatMessages = chatMessages.filter((m) => m.id !== del.dataset.id);
+      renderChat(false);
+      fetchChat();
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+    return;
+  }
+  const bubble = e.target.closest('.chat-msg.mine');
+  if (bubble) bubble.classList.toggle('show-actions');
+});
+
+setInterval(checkUnread, UNREAD_POLL_MS);
 
 /* ---------- History ---------- */
 
@@ -855,4 +1022,5 @@ if (person) {
   showMainScreen();
   loadMilestones();
   syncSubscription();
+  checkUnread();
 }

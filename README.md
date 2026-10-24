@@ -1,6 +1,7 @@
 # Us 💛
 
-A small two-person app for Vinita and Sharvin: quick pings, a 24-hour history,
+A small two-person app for Vinita and Sharvin: a private chat with seen ticks,
+quick pings, a 24-hour history,
 a live "days together" page, questions for each other, saved places, and
 countdowns to the next time they meet. Everything that matters sends a push
 notification to the other person's phone.

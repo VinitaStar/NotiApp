@@ -17,6 +17,8 @@ const MESSAGES_KEY = 'us-app:messages';
 const QUESTIONS_KEY = 'us-app:questions';
 const PLACES_KEY = 'us-app:places';
 const EVENTS_KEY = 'us-app:events';
+const CHAT_KEY = 'us-app:chat';
+const MAX_CHAT_MESSAGES = 1000;
 const MILESTONE_NOTIFS_KEY = 'us-app:milestone-notifs';
 
 const NAMES = { me: 'Vinita', bae: 'Sharvin' };
@@ -125,6 +127,21 @@ async function getMessages() {
   const messages = await loadData(MESSAGES_KEY, []);
   const now = Date.now();
   return messages.filter((m) => now - m.at < DAY_MS).sort((a, b) => b.at - a.at);
+}
+
+// The chat is polled every few seconds, so it is kept in memory and written through to storage.
+let chatCache = null;
+let chatVersion = Date.now();
+
+async function getChat() {
+  if (!chatCache) chatCache = await loadData(CHAT_KEY, []);
+  return chatCache;
+}
+
+async function setChat(messages) {
+  chatCache = messages.slice(-MAX_CHAT_MESSAGES);
+  chatVersion = Math.max(chatVersion + 1, Date.now());
+  await saveData(CHAT_KEY, chatCache);
 }
 
 function isSpecialDay(n) {
@@ -415,6 +432,91 @@ app.get('/api/cron/check', async (req, res) => {
   } catch (err) {
     console.error('Scheduled checks failed:', err.message);
     res.status(500).json({ error: 'scheduled checks failed' });
+  }
+});
+
+app.get('/api/chat', async (req, res) => {
+  try {
+    if (chatCache && String(chatVersion) === req.query.v) return res.json({ unchanged: true, v: chatVersion });
+    const messages = await getChat();
+    res.json({ v: chatVersion, messages: messages.slice(-300) });
+  } catch (err) {
+    console.error('Failed to load chat:', err.message);
+    res.status(500).json({ error: 'failed to load chat' });
+  }
+});
+
+app.get('/api/chat/unread', async (req, res) => {
+  const { person } = req.query;
+  if (!PEOPLE.includes(person)) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const messages = await getChat();
+    res.json({ count: messages.filter((m) => m.from !== person && !m.seenAt).length });
+  } catch (err) {
+    console.error('Failed to count unread:', err.message);
+    res.status(500).json({ error: 'failed to count unread' });
+  }
+});
+
+app.post('/api/chat', async (req, res) => {
+  const { from } = req.body;
+  const text = typeof req.body.text === 'string' ? req.body.text.trim().slice(0, 1000) : '';
+  if (!PEOPLE.includes(from) || !text) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const messages = await getChat();
+    const entry = { id: crypto.randomUUID(), from, text, at: Date.now(), seenAt: null };
+    await setChat([...messages, entry]);
+    const to = PEOPLE.find((p) => p !== from);
+    pushTo(to, `💬 ${NAMES[from]}`, text.slice(0, 120)).catch((err) => console.error('Chat push failed:', err.message));
+    res.json({ ok: true, message: entry });
+  } catch (err) {
+    console.error('Failed to send chat message:', err.message);
+    res.status(500).json({ error: 'failed to send message' });
+  }
+});
+
+app.post('/api/chat/seen', async (req, res) => {
+  const { person } = req.body;
+  if (!PEOPLE.includes(person)) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const messages = await getChat();
+    const now = Date.now();
+    let changed = false;
+    for (const m of messages) {
+      if (m.from !== person && !m.seenAt) {
+        m.seenAt = now;
+        changed = true;
+      }
+    }
+    if (changed) await setChat(messages);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to mark chat as seen:', err.message);
+    res.status(500).json({ error: 'failed to mark as seen' });
+  }
+});
+
+app.delete('/api/chat/:id', async (req, res) => {
+  const { from } = req.query;
+  if (!PEOPLE.includes(from)) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const messages = await getChat();
+    const entry = messages.find((m) => m.id === req.params.id);
+    if (!entry) return res.json({ ok: true });
+    if (entry.from !== from) return res.status(403).json({ error: 'you can only delete your own messages' });
+    await setChat(messages.filter((m) => m.id !== entry.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete chat message:', err.message);
+    res.status(500).json({ error: 'failed to delete message' });
   }
 });
 
