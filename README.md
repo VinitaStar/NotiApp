@@ -25,7 +25,8 @@ Without the Upstash variables the app falls back to JSON files in `data/`, which
 `.github/workflows/scheduled-checks.yml` calls `/api/cron/check` every 30 minutes
 (and wakes the sleeping Render app). That endpoint sends, between 08:00 and 23:00 Malaysia time:
 
-- **Milestone alerts** when a date reaches 100, 200, 300… days, or a repeating number such as 111, 222, 444, 555, 1111
+- **"Together since" alerts** (12 Apr 2025) at 100, 200, 300… days or a repeating number such as 111, 222, 444, 555, 1111, plus a reminder on the 12th of every month and each yearly anniversary
+- **Big milestones** on every other date, only at 1000, 2000, 3000… days (the other dates just show their counters)
 - **Question reminders** to whoever hasn't answered yet (after 1 hour, then every 4 hours, up to 5 times)
 - **Countdown reminders** 7 days and 1 day before a meet-up, and on the day
 

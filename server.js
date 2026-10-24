@@ -21,7 +21,10 @@ const MILESTONE_NOTIFS_KEY = 'us-app:milestone-notifs';
 
 const NAMES = { me: 'Vinita', bae: 'Sharvin' };
 
-// A milestone counts as special at 100, 200, 300... and at 111, 222, 444, 555, 1111...
+// Only the "together since" date (hero) sends day-count alerts at 100, 200, 300... and at
+// 111, 222, 444, 555, 1111..., plus a reminder on the 12th of every month and each anniversary.
+// Every other date is display only, apart from the big ones: 1000, 2000, 3000 days.
+// A missed alert is still sent if it happened within the last CATCH_UP_DAYS days.
 const CATCH_UP_DAYS = 2;
 
 // Unanswered questions nudge the other person: first after 1h, then every 4h, up to 5 times.
@@ -134,32 +137,78 @@ function nextSpecialDay(n) {
   return next;
 }
 
+function isBigDay(n) {
+  return n >= 1000 && n % 1000 === 0;
+}
+
+const shouldNotifyDay = (milestone, n) => (milestone.hero ? isSpecialDay(n) : isBigDay(n));
+
 // Notifications only go out between 08:00 and 23:00 Malaysia time.
 function isQuietHours(now = Date.now()) {
   const hour = new Date(now + MYT_OFFSET_MS).getUTCHours();
   return hour >= 23 || hour < 8;
 }
 
+function mytParts(ms) {
+  const d = new Date(ms + MYT_OFFSET_MS);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth(), date: d.getUTCDate() };
+}
+
+// The next "12th of the month" after now, counted in months since the hero date.
+function nextMonthly(heroMs, now = Date.now()) {
+  const start = mytParts(heroMs);
+  let n = 1;
+  let at = Date.UTC(start.year, start.month + n, start.date) - MYT_OFFSET_MS;
+  while (at <= now) {
+    n++;
+    at = Date.UTC(start.year, start.month + n, start.date) - MYT_OFFSET_MS;
+  }
+  return { months: n, at };
+}
+
 async function checkMilestones(now = Date.now()) {
   const notified = await loadData(MILESTONE_NOTIFS_KEY, []);
   let sent = 0;
+
+  async function announce(key, title, body) {
+    if (notified.includes(key)) return;
+    const results = await Promise.all(PEOPLE.map((p) => pushTo(p, title, body)));
+    if (!results.some((r) => r.ok)) return;
+
+    notified.push(key);
+    await saveData(MILESTONE_NOTIFS_KEY, notified);
+    await addMessage('us', title, body, 'milestone');
+    sent++;
+  }
 
   for (let i = 0; i < MILESTONES.length; i++) {
     const days = Math.floor((now - new Date(MILESTONES[i].date).getTime()) / DAY_MS);
 
     for (let d = days; d >= Math.max(100, days - CATCH_UP_DAYS); d--) {
-      const key = `${i}:${d}`;
-      if (!isSpecialDay(d) || notified.includes(key)) continue;
+      if (!shouldNotifyDay(MILESTONES[i], d)) continue;
+      await announce(`${i}:${d}`, `🎉 ${d} days!`, `${d} days since "${MILESTONES[i].label}" 💛`);
+    }
+  }
 
-      const title = `🎉 ${d} days!`;
-      const body = `${d} days since "${MILESTONES[i].label}" 💛`;
-      const results = await Promise.all(PEOPLE.map((p) => pushTo(p, title, body)));
-      if (!results.some((r) => r.ok)) continue;
+  const hero = MILESTONES.find((m) => m.hero);
+  const start = mytParts(new Date(hero.date).getTime());
+  for (let back = 0; back <= CATCH_UP_DAYS; back++) {
+    const day = mytParts(now - back * DAY_MS);
+    if (day.date !== start.date) continue;
 
-      notified.push(key);
-      await saveData(MILESTONE_NOTIFS_KEY, notified);
-      await addMessage('us', title, body, 'milestone');
-      sent++;
+    const months = (day.year - start.year) * 12 + (day.month - start.month);
+    if (months < 1) continue;
+
+    const names = `${NAMES.me} & ${NAMES.bae}`;
+    if (months % 12 === 0) {
+      const years = months / 12;
+      await announce(
+        `anniversary:${years}`,
+        `💍 ${years} ${years === 1 ? 'year' : 'years'} together!`,
+        `Happy anniversary, ${names} 💛`
+      );
+    } else {
+      await announce(`monthly:${months}`, `💞 ${months} months together!`, `Happy monthsary, ${names} 💛`);
     }
   }
   return sent;
@@ -353,7 +402,9 @@ app.get('/api/milestones', (req, res) => {
     MILESTONES.map((m) => {
       const days = Math.floor((now - new Date(m.date).getTime()) / DAY_MS);
       const next = nextSpecialDay(days);
-      return { ...m, next, nextAt: new Date(m.date).getTime() + next * DAY_MS };
+      const entry = { ...m, next, nextAt: new Date(m.date).getTime() + next * DAY_MS };
+      if (m.hero) entry.nextMonthly = nextMonthly(new Date(m.date).getTime(), now);
+      return entry;
     })
   );
 });

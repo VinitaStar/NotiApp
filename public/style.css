@@ -378,6 +378,7 @@ textarea.text-input { resize: vertical; min-height: 64px; }
 .ymd { margin-top: 8px; color: var(--gold); font-size: 0.85rem; font-weight: 500; }
 .next-line { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); color: var(--muted); font-size: 0.76rem; }
 .next-line b { color: var(--gold); font-weight: 600; }
+.next-line.sub { margin-top: 6px; padding-top: 0; border-top: none; }
 
 .section-title { margin: 20px 4px 10px; color: var(--muted); font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; }
 

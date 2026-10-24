@@ -389,6 +389,13 @@ function nextLine(m) {
   return `<div class="next-line">✨ Next: <b>${m.next} days</b> · ${formatDate(m.nextAt)} · in ${left} ${left === 1 ? 'day' : 'days'}</div>`;
 }
 
+function monthlyLine(n) {
+  const left = Math.max(0, Math.ceil((n.at - Date.now()) / DAY_MS));
+  const years = n.months / 12;
+  const label = Number.isInteger(years) ? `${years} ${years === 1 ? 'year' : 'years'} anniversary 💍` : `${n.months} months`;
+  return `<div class="next-line sub">💞 <b>${label}</b> · ${formatDate(n.at)} · in ${left} ${left === 1 ? 'day' : 'days'}</div>`;
+}
+
 function heroCardHtml(m) {
   const ts = new Date(m.date).getTime();
   return `<div class="hero-card">
@@ -398,6 +405,7 @@ function heroCardHtml(m) {
     <div class="tick" data-ts="${ts}" data-dir="since" data-label="days together"></div>
     <div class="ymd" data-ts="${ts}"></div>
     ${nextLine(m)}
+    ${m.nextMonthly ? monthlyLine(m.nextMonthly) : ''}
   </div>`;
 }
 
