@@ -8,27 +8,52 @@ const { Redis } = require('@upstash/redis');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PEOPLE = ['me', 'bae'];
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const MYT_OFFSET_MS = 8 * HOUR_MS;
 
 const SUBS_KEY = 'us-app:subscriptions';
 const MESSAGES_KEY = 'us-app:messages';
 const QUESTIONS_KEY = 'us-app:questions';
 const PLACES_KEY = 'us-app:places';
+const EVENTS_KEY = 'us-app:events';
 const MILESTONE_NOTIFS_KEY = 'us-app:milestone-notifs';
 
 const NAMES = { me: 'Vinita', bae: 'Sharvin' };
 
-const MILESTONES = [
-  { label: 'He saw me first on Insta', date: '2023-02-10T00:00:00' },
-  { label: 'He confessed his love to me', date: '2024-01-31T00:00:00' },
-  { label: 'First meet up', date: '2024-11-15T00:00:00' },
-  { label: 'First pic together', date: '2024-11-30T00:00:00' },
-  { label: 'She accepted his love', date: '2025-04-12T00:00:00' },
-  { label: 'First outing at KL', date: '2025-05-03T00:00:00' },
-  { label: 'First kiss 😘', date: '2025-05-11T00:00:00' },
-  { label: 'First naked day', date: '2026-05-27T00:00:00' },
-  { label: 'First sleep over', date: '2026-07-14T00:00:00' },
+// A milestone counts as special at 100, 200, 300... and at 111, 222, 444, 555, 1111...
+const CATCH_UP_DAYS = 2;
+
+// Unanswered questions nudge the other person: first after 1h, then every 4h, up to 5 times.
+const REMIND_FIRST_MS = HOUR_MS;
+const REMIND_REPEAT_MS = 4 * HOUR_MS;
+const MAX_REMINDERS = 5;
+
+const EVENT_STEPS = [
+  { key: '7d', ms: 7 * DAY_MS },
+  { key: '1d', ms: DAY_MS },
 ];
+
+const MILESTONES = [
+  { label: 'He saw me first on Insta', date: '2023-02-10T00:00:00+08:00' },
+  { label: 'He confessed his love to me', date: '2024-01-31T00:00:00+08:00' },
+  { label: 'First meet up', date: '2024-11-15T00:00:00+08:00' },
+  { label: 'First pic together', date: '2024-11-30T00:00:00+08:00' },
+  { label: 'She accepted his love', date: '2025-04-12T00:00:00+08:00', hero: true },
+  { label: 'First outing at KL', date: '2025-05-03T00:00:00+08:00' },
+  { label: 'First kiss 😘', date: '2025-05-11T00:00:00+08:00' },
+  { label: 'First naked day', date: '2026-05-27T00:00:00+08:00' },
+  { label: 'First sleep over', date: '2026-07-14T00:00:00+08:00' },
+];
+
+const MESSAGES = {
+  eating: { title: '🍽️ {name} is eating', body: 'Ask what is on the plate 😋' },
+  sleepy: { title: '😴 {name} is sleepy', body: 'Maybe time to say goodnight 🌙' },
+  miss: { title: '🥺 {name} misses you', body: 'Send some love back 💌' },
+  love: { title: '❤️ {name} loves you', body: 'Always and forever 💛' },
+  awake: { title: '☀️ {name} just woke up', body: 'Say good morning!' },
+  night: { title: '🌙 {name} is going to sleep', body: 'Sweet dreams 💤' },
+};
 
 const redis =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -37,15 +62,6 @@ const redis =
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       })
     : null;
-
-const MESSAGES = {
-  eating: { title: '🍽️ Eating', body: 'is eating right now' },
-  sleepy: { title: '😴 Sleepy', body: 'is getting sleepy' },
-  miss: { title: '🥺 Miss you', body: 'misses you right now' },
-  love: { title: '❤️ Love you', body: 'loves you' },
-  awake: { title: '☀️ Good morning', body: 'just woke up' },
-  night: { title: '🌙 Goodnight', body: 'is going to sleep' },
-};
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT,
@@ -94,11 +110,11 @@ async function pushTo(person, title, body) {
   }
 }
 
-async function addMessage(from, title, body) {
+async function addMessage(from, title, body, kind = 'ping') {
   const messages = await loadData(MESSAGES_KEY, []);
   const now = Date.now();
   const fresh = messages.filter((m) => now - m.at < DAY_MS);
-  fresh.push({ id: crypto.randomUUID(), from, title, body, at: now });
+  fresh.push({ id: crypto.randomUUID(), from, title, body, kind, at: now });
   await saveData(MESSAGES_KEY, fresh);
 }
 
@@ -108,28 +124,165 @@ async function getMessages() {
   return messages.filter((m) => now - m.at < DAY_MS).sort((a, b) => b.at - a.at);
 }
 
-async function checkMilestones() {
+function isSpecialDay(n) {
+  return n >= 100 && (n % 100 === 0 || /^(\d)\1{2,}$/.test(String(n)));
+}
+
+function nextSpecialDay(n) {
+  let next = Math.max(n + 1, 100);
+  while (!isSpecialDay(next)) next++;
+  return next;
+}
+
+// Notifications only go out between 08:00 and 23:00 Malaysia time.
+function isQuietHours(now = Date.now()) {
+  const hour = new Date(now + MYT_OFFSET_MS).getUTCHours();
+  return hour >= 23 || hour < 8;
+}
+
+async function checkMilestones(now = Date.now()) {
   const notified = await loadData(MILESTONE_NOTIFS_KEY, []);
-  const now = Date.now();
-  let changed = false;
+  let sent = 0;
 
   for (let i = 0; i < MILESTONES.length; i++) {
     const days = Math.floor((now - new Date(MILESTONES[i].date).getTime()) / DAY_MS);
-    if (days <= 0 || days % 100 !== 0) continue;
 
-    const key = `${i}:${days}`;
-    if (notified.includes(key)) continue;
+    for (let d = days; d >= Math.max(100, days - CATCH_UP_DAYS); d--) {
+      const key = `${i}:${d}`;
+      if (!isSpecialDay(d) || notified.includes(key)) continue;
 
-    const title = `🎉 ${days} days!`;
-    const body = `${days} days since ${MILESTONES[i].label.toLowerCase()} — ${NAMES.me} & ${NAMES.bae} 💛`;
-    await Promise.all(PEOPLE.map((p) => pushTo(p, title, body)));
-    await addMessage('us', title, body);
-    notified.push(key);
-    changed = true;
+      const title = `🎉 ${d} days!`;
+      const body = `${d} days since "${MILESTONES[i].label}" 💛`;
+      const results = await Promise.all(PEOPLE.map((p) => pushTo(p, title, body)));
+      if (!results.some((r) => r.ok)) continue;
+
+      notified.push(key);
+      await saveData(MILESTONE_NOTIFS_KEY, notified);
+      await addMessage('us', title, body, 'milestone');
+      sent++;
+    }
+  }
+  return sent;
+}
+
+async function remindQuestions(now = Date.now()) {
+  const questions = await loadData(QUESTIONS_KEY, []);
+  const due = questions.filter((q) => {
+    if (q.answer) return false;
+    const count = q.reminders || 0;
+    if (count >= MAX_REMINDERS) return false;
+    const wait = count === 0 ? REMIND_FIRST_MS : REMIND_REPEAT_MS;
+    return now - (q.lastRemindedAt || q.askedAt) >= wait;
+  });
+
+  const reminded = [];
+  for (const q of due) {
+    const to = PEOPLE.find((p) => p !== q.askedBy);
+    const result = await pushTo(to, `❓ ${NAMES[q.askedBy]} is waiting for your answer`, q.question.slice(0, 120));
+    if (result.ok) reminded.push(q.id);
   }
 
-  if (changed) await saveData(MILESTONE_NOTIFS_KEY, notified);
+  if (reminded.length) {
+    const fresh = await loadData(QUESTIONS_KEY, []);
+    for (const q of fresh) {
+      if (!reminded.includes(q.id)) continue;
+      q.reminders = (q.reminders || 0) + 1;
+      q.lastRemindedAt = now;
+    }
+    await saveData(QUESTIONS_KEY, fresh);
+  }
+  return reminded.length;
 }
+
+function crossedEventSteps(left) {
+  return EVENT_STEPS.filter((s) => left <= s.ms).map((s) => s.key);
+}
+
+function formatMyt(ms) {
+  return new Date(ms).toLocaleString('en-GB', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+async function checkEvents(now = Date.now()) {
+  const events = await loadData(EVENTS_KEY, []);
+  const updates = {};
+
+  for (const ev of events) {
+    const notified = ev.notified || [];
+    const left = ev.at - now;
+    let title;
+    let keys;
+
+    if (left <= 0) {
+      if (notified.includes('start') || -left > 12 * HOUR_MS) continue;
+      title = `🎉 It's today! ${ev.title}`;
+      keys = ['start'];
+    } else {
+      keys = crossedEventSteps(left).filter((k) => !notified.includes(k));
+      if (!keys.length) continue;
+      const days = Math.ceil(left / DAY_MS);
+      title = `✈️ ${days} ${days === 1 ? 'day' : 'days'} to go`;
+    }
+
+    const results = await Promise.all(PEOPLE.map((p) => pushTo(p, title, ev.title)));
+    if (results.some((r) => r.ok)) updates[ev.id] = keys;
+  }
+
+  const ids = Object.keys(updates);
+  if (ids.length) {
+    const fresh = await loadData(EVENTS_KEY, []);
+    for (const ev of fresh) {
+      if (updates[ev.id]) ev.notified = [...(ev.notified || []), ...updates[ev.id]];
+    }
+    await saveData(EVENTS_KEY, fresh);
+  }
+  return ids.length;
+}
+
+async function safely(name, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`${name} failed:`, err.message);
+    return null;
+  }
+}
+
+let checking = null;
+function runScheduledChecks() {
+  if (!checking) {
+    checking = (async () => {
+      const now = Date.now();
+      if (isQuietHours(now)) return { skipped: 'quiet hours' };
+      return {
+        milestones: await safely('milestones', () => checkMilestones(now)),
+        reminders: await safely('reminders', () => remindQuestions(now)),
+        events: await safely('events', () => checkEvents(now)),
+      };
+    })().finally(() => {
+      checking = null;
+    });
+  }
+  return checking;
+}
+
+const BLOCKED_FOLDER_NAMES = ['__proto__', 'constructor', 'prototype'];
+
+function cleanFolderName(value) {
+  const name = typeof value === 'string' ? value.trim().slice(0, 40) : '';
+  return BLOCKED_FOLDER_NAMES.includes(name) ? '' : name;
+}
+
+function normalizeUrl(value) {
+  const link = typeof value === 'string' ? value.trim() : '';
+  if (link && !/^https?:\/\//i.test(link)) return `https://${link}`;
+  return link;
+}
+
+const hasFolder = (places, name) => Object.prototype.hasOwnProperty.call(places, name);
 
 const app = express();
 app.use(express.json());
@@ -163,16 +316,17 @@ app.post('/api/notify', async (req, res) => {
     return res.status(400).json({ error: 'invalid payload' });
   }
   const to = PEOPLE.find((p) => p !== from);
+  const name = NAMES[from];
   const notification = trimmedCustom
-    ? { title: '💬 New message', body: trimmedCustom.slice(0, 200) }
-    : MESSAGES[type];
+    ? { title: `💬 ${name}`, body: trimmedCustom.slice(0, 200), kind: 'custom' }
+    : { title: MESSAGES[type].title.replace('{name}', name), body: MESSAGES[type].body, kind: 'ping' };
 
   try {
-    await addMessage(from, notification.title, notification.body);
+    await addMessage(from, notification.title, notification.body, notification.kind);
     const result = await pushTo(to, notification.title, notification.body);
     if (!result.ok) {
       if (result.reason === 'not-subscribed') {
-        return res.status(404).json({ error: `${to} has not enabled notifications yet` });
+        return res.status(404).json({ error: `${NAMES[to]} has not enabled notifications yet` });
       }
       return res.status(500).json({ error: 'failed to send notification' });
     }
@@ -183,22 +337,33 @@ app.post('/api/notify', async (req, res) => {
   }
 });
 
-app.get('/api/milestones', async (req, res) => {
-  try {
-    checkMilestones().catch((err) => console.error('Milestone check failed:', err.message));
-    res.json(MILESTONES);
-  } catch (err) {
-    console.error('Failed to load milestones:', err.message);
-    res.status(500).json({ error: 'failed to load milestones' });
-  }
-});
-
 app.get('/api/messages', async (req, res) => {
   try {
     res.json(await getMessages());
   } catch (err) {
     console.error('Failed to load messages:', err.message);
     res.status(500).json({ error: 'failed to load messages' });
+  }
+});
+
+app.get('/api/milestones', (req, res) => {
+  runScheduledChecks().catch((err) => console.error('Scheduled checks failed:', err.message));
+  const now = Date.now();
+  res.json(
+    MILESTONES.map((m) => {
+      const days = Math.floor((now - new Date(m.date).getTime()) / DAY_MS);
+      const next = nextSpecialDay(days);
+      return { ...m, next, nextAt: new Date(m.date).getTime() + next * DAY_MS };
+    })
+  );
+});
+
+app.get('/api/cron/check', async (req, res) => {
+  try {
+    res.json(await runScheduledChecks());
+  } catch (err) {
+    console.error('Scheduled checks failed:', err.message);
+    res.status(500).json({ error: 'scheduled checks failed' });
   }
 });
 
@@ -228,11 +393,13 @@ app.post('/api/questions', async (req, res) => {
       answer: null,
       answeredBy: null,
       answeredAt: null,
+      reminders: 0,
+      lastRemindedAt: null,
     };
     questions.push(entry);
     await saveData(QUESTIONS_KEY, questions);
     const to = PEOPLE.find((p) => p !== from);
-    await pushTo(to, '❓ New question', q.slice(0, 120));
+    await pushTo(to, `❓ ${NAMES[from]} asked you something`, q.slice(0, 120));
     res.json({ ok: true, question: entry });
   } catch (err) {
     console.error('Failed to save question:', err.message);
@@ -255,7 +422,7 @@ app.post('/api/questions/:id/answer', async (req, res) => {
     entry.answeredBy = from;
     entry.answeredAt = Date.now();
     await saveData(QUESTIONS_KEY, questions);
-    await pushTo(entry.askedBy, '💬 They answered!', a.slice(0, 120));
+    await pushTo(entry.askedBy, `💬 ${NAMES[from]} answered`, a.slice(0, 120));
     res.json({ ok: true, question: entry });
   } catch (err) {
     console.error('Failed to save answer:', err.message);
@@ -285,14 +452,13 @@ app.get('/api/places', async (req, res) => {
 });
 
 app.post('/api/places/folders', async (req, res) => {
-  const { folder } = req.body;
-  const name = typeof folder === 'string' ? folder.trim().slice(0, 40) : '';
+  const name = cleanFolderName(req.body.folder);
   if (!name) {
     return res.status(400).json({ error: 'invalid payload' });
   }
   try {
     const places = await loadData(PLACES_KEY, {});
-    if (!places[name]) places[name] = [];
+    if (!hasFolder(places, name)) places[name] = [];
     await saveData(PLACES_KEY, places);
     res.json({ ok: true, places });
   } catch (err) {
@@ -301,17 +467,54 @@ app.post('/api/places/folders', async (req, res) => {
   }
 });
 
+app.put('/api/places/folders/:name', async (req, res) => {
+  const oldName = req.params.name;
+  const newName = cleanFolderName(req.body.name);
+  if (!newName) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const places = await loadData(PLACES_KEY, {});
+    if (!hasFolder(places, oldName)) return res.status(404).json({ error: 'folder not found' });
+    if (newName !== oldName && hasFolder(places, newName)) {
+      return res.status(409).json({ error: 'a folder with that name already exists' });
+    }
+    const renamed = {};
+    for (const [name, links] of Object.entries(places)) {
+      renamed[name === oldName ? newName : name] = links;
+    }
+    await saveData(PLACES_KEY, renamed);
+    res.json({ ok: true, places: renamed });
+  } catch (err) {
+    console.error('Failed to rename folder:', err.message);
+    res.status(500).json({ error: 'failed to rename folder' });
+  }
+});
+
+app.delete('/api/places/folders/:name', async (req, res) => {
+  try {
+    const places = await loadData(PLACES_KEY, {});
+    if (hasFolder(places, req.params.name)) {
+      delete places[req.params.name];
+      await saveData(PLACES_KEY, places);
+    }
+    res.json({ ok: true, places });
+  } catch (err) {
+    console.error('Failed to delete folder:', err.message);
+    res.status(500).json({ error: 'failed to delete folder' });
+  }
+});
+
 app.post('/api/places/links', async (req, res) => {
-  const { from, folder, url, title } = req.body;
-  const folderName = typeof folder === 'string' ? folder.trim().slice(0, 40) : '';
-  let link = typeof url === 'string' ? url.trim() : '';
-  if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
+  const { from, title } = req.body;
+  const folderName = cleanFolderName(req.body.folder);
+  const link = normalizeUrl(req.body.url);
   if (!PEOPLE.includes(from) || !folderName || !link) {
     return res.status(400).json({ error: 'invalid payload' });
   }
   try {
     const places = await loadData(PLACES_KEY, {});
-    if (!places[folderName]) places[folderName] = [];
+    if (!hasFolder(places, folderName)) places[folderName] = [];
     places[folderName].push({
       id: crypto.randomUUID(),
       url: link,
@@ -327,12 +530,39 @@ app.post('/api/places/links', async (req, res) => {
   }
 });
 
+app.put('/api/places/links/:folder/:id', async (req, res) => {
+  const targetFolder = cleanFolderName(req.body.folder) || req.params.folder;
+  const link = normalizeUrl(req.body.url);
+  if (!link) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const places = await loadData(PLACES_KEY, {});
+    const links = hasFolder(places, req.params.folder) ? places[req.params.folder] : [];
+    const entry = links.find((l) => l.id === req.params.id);
+    if (!entry) return res.status(404).json({ error: 'link not found' });
+
+    entry.url = link;
+    entry.title = typeof req.body.title === 'string' && req.body.title.trim() ? req.body.title.trim().slice(0, 100) : link;
+
+    if (targetFolder !== req.params.folder) {
+      places[req.params.folder] = links.filter((l) => l.id !== entry.id);
+      if (!hasFolder(places, targetFolder)) places[targetFolder] = [];
+      places[targetFolder].push(entry);
+    }
+    await saveData(PLACES_KEY, places);
+    res.json({ ok: true, places });
+  } catch (err) {
+    console.error('Failed to update link:', err.message);
+    res.status(500).json({ error: 'failed to update link' });
+  }
+});
+
 app.delete('/api/places/links/:folder/:id', async (req, res) => {
   try {
     const places = await loadData(PLACES_KEY, {});
-    const folder = places[req.params.folder];
-    if (folder) {
-      places[req.params.folder] = folder.filter((l) => l.id !== req.params.id);
+    if (hasFolder(places, req.params.folder)) {
+      places[req.params.folder] = places[req.params.folder].filter((l) => l.id !== req.params.id);
       await saveData(PLACES_KEY, places);
     }
     res.json({ ok: true, places });
@@ -342,5 +572,100 @@ app.delete('/api/places/links/:folder/:id', async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`us-app listening on port ${port}`));
+function cleanEventTitle(value) {
+  return typeof value === 'string' ? value.trim().slice(0, 80) : '';
+}
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const events = await loadData(EVENTS_KEY, []);
+    res.json(events.sort((a, b) => a.at - b.at));
+  } catch (err) {
+    console.error('Failed to load events:', err.message);
+    res.status(500).json({ error: 'failed to load events' });
+  }
+});
+
+app.post('/api/events', async (req, res) => {
+  const { from } = req.body;
+  const title = cleanEventTitle(req.body.title);
+  const at = Number(req.body.at);
+  if (!PEOPLE.includes(from) || !title || !Number.isFinite(at) || at <= 0) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const events = await loadData(EVENTS_KEY, []);
+    const entry = {
+      id: crypto.randomUUID(),
+      title,
+      at,
+      createdBy: from,
+      createdAt: Date.now(),
+      notified: crossedEventSteps(at - Date.now()),
+    };
+    events.push(entry);
+    await saveData(EVENTS_KEY, events);
+    const to = PEOPLE.find((p) => p !== from);
+    await pushTo(to, `📅 ${NAMES[from]} added a countdown`, `${title} · ${formatMyt(at)}`);
+    res.json({ ok: true, event: entry });
+  } catch (err) {
+    console.error('Failed to save event:', err.message);
+    res.status(500).json({ error: 'failed to save event' });
+  }
+});
+
+app.put('/api/events/:id', async (req, res) => {
+  const { from } = req.body;
+  const title = cleanEventTitle(req.body.title);
+  const at = Number(req.body.at);
+  if (!PEOPLE.includes(from) || !title || !Number.isFinite(at) || at <= 0) {
+    return res.status(400).json({ error: 'invalid payload' });
+  }
+  try {
+    const events = await loadData(EVENTS_KEY, []);
+    const entry = events.find((ev) => ev.id === req.params.id);
+    if (!entry) return res.status(404).json({ error: 'event not found' });
+
+    const timeChanged = entry.at !== at;
+    entry.title = title;
+    entry.at = at;
+    if (timeChanged) entry.notified = crossedEventSteps(at - Date.now());
+    await saveData(EVENTS_KEY, events);
+
+    if (timeChanged) {
+      const to = PEOPLE.find((p) => p !== from);
+      await pushTo(to, `🗓️ ${NAMES[from]} changed a plan`, `${title} · ${formatMyt(at)}`);
+    }
+    res.json({ ok: true, event: entry });
+  } catch (err) {
+    console.error('Failed to update event:', err.message);
+    res.status(500).json({ error: 'failed to update event' });
+  }
+});
+
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const events = await loadData(EVENTS_KEY, []);
+    await saveData(EVENTS_KEY, events.filter((ev) => ev.id !== req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to delete event:', err.message);
+    res.status(500).json({ error: 'failed to delete event' });
+  }
+});
+
+if (require.main === module) {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => console.log(`us-app listening on port ${port}`));
+}
+
+module.exports = {
+  isSpecialDay,
+  nextSpecialDay,
+  isQuietHours,
+  checkMilestones,
+  remindQuestions,
+  checkEvents,
+  loadData,
+  saveData,
+};

@@ -2,322 +2,116 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#240b1d" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Us" />
 <title>Us 💛</title>
 <link rel="manifest" href="/manifest.json" />
-<link rel="icon" href="/icon.svg" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
-<style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(160deg, #fff0f5, #ffe3ec);
-    padding: 24px 16px;
-  }
-  .card {
-    width: 100%;
-    max-width: 480px;
-    margin: 0 auto;
-    text-align: center;
-  }
-  h1 { font-size: 1.6rem; margin-bottom: 4px; color: #333; }
-  p.sub { color: #888; margin-top: 0; margin-bottom: 24px; }
-  .hidden { display: none !important; }
-  .person-choices { display: flex; gap: 16px; justify-content: center; }
-  .person-btn {
-    flex: 1;
-    padding: 24px 12px;
-    font-size: 1.1rem;
-    border: none;
-    border-radius: 18px;
-    background: white;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    cursor: pointer;
-  }
-  #who-am-i { color: #b5537a; font-weight: 600; margin-bottom: 12px; }
-  .ping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
-  .ping-btn {
-    padding: 22px 10px;
-    font-size: 1.05rem;
-    border: none;
-    border-radius: 18px;
-    background: white;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    cursor: pointer;
-  }
-  .ping-btn:active { transform: scale(0.97); }
-  .ping-btn:disabled { opacity: 0.5; }
-  #enable-notifications {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 14px;
-    background: #ff6b9d;
-    color: white;
-    font-size: 0.95rem;
-    cursor: pointer;
-    margin-bottom: 14px;
-  }
-  #status { min-height: 20px; font-size: 0.9rem; color: #666; margin-top: 8px; }
-  .custom-row { display: flex; gap: 8px; margin-bottom: 14px; }
-  .custom-row input, .text-input {
-    flex: 1;
-    padding: 12px 14px;
-    border: none;
-    border-radius: 14px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    font-size: 0.95rem;
-    font-family: inherit;
-  }
-  .custom-row button, .primary-btn {
-    padding: 12px 18px;
-    border: none;
-    border-radius: 14px;
-    background: #ff6b9d;
-    color: white;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .custom-row button:disabled, .primary-btn:disabled { opacity: 0.5; }
-
-  .tabs {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    margin-bottom: 18px;
-  }
-  .tab-btn {
-    flex: 0 0 auto;
-    padding: 9px 14px;
-    border-radius: 20px;
-    border: none;
-    background: white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    font-size: 0.85rem;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .tab-btn.active { background: #ff6b9d; color: white; }
-  .tab-content { display: none; text-align: left; }
-  .tab-content.active { display: block; }
-
-  .empty-note { color: #999; font-size: 0.9rem; text-align: center; padding: 20px 0; }
-
-  .item-card {
-    background: white;
-    border-radius: 14px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.06);
-  }
-  .item-card .meta { font-size: 0.72rem; color: #999; margin-top: 6px; }
-
-  .dates-header { text-align: center; margin-bottom: 18px; }
-  .dates-header h2 {
-    font-family: 'Dancing Script', cursive;
-    font-size: 2.4rem;
-    margin: 0;
-    background: linear-gradient(90deg, #ff6b9d, #b5537a);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .dates-header p { color: #a97b8f; font-size: 0.85rem; margin: 2px 0 0; font-style: italic; }
-  .date-card {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    background: linear-gradient(135deg, #ffffff, #fff5f8);
-    border: 1px solid rgba(255, 107, 157, 0.15);
-  }
-  .date-card .icon {
-    font-size: 1.5rem;
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 107, 157, 0.12);
-    border-radius: 50%;
-  }
-  .date-card .label { font-weight: 600; color: #333; font-family: 'Poppins', sans-serif; }
-  .date-card .counter { margin-top: 4px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; }
-  .date-card .days-big {
-    font-size: 1.7rem;
-    font-weight: 700;
-    background: linear-gradient(90deg, #ff6b9d, #b5537a);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    line-height: 1;
-  }
-  .date-card .days-label { font-size: 0.72rem; color: #b5537a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-  .date-card .sub-time { font-size: 0.72rem; color: #a5828f; width: 100%; }
-  .date-card .date { font-size: 0.72rem; color: #999; margin-top: 2px; }
-
-  .stack-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
-  textarea.text-input { resize: vertical; min-height: 60px; }
-
-  .question-card .q { font-weight: 600; color: #333; }
-  .question-card .q-meta { font-size: 0.72rem; color: #999; margin-top: 2px; }
-  .question-card .a { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eee; color: #555; }
-  .question-card .q-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .answer-form { display: flex; gap: 6px; margin-top: 8px; }
-  .answer-form input { flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid #eee; font-family: inherit; }
-  .answer-form button { padding: 8px 12px; border: none; border-radius: 10px; background: #ff6b9d; color: white; cursor: pointer; }
-  .del-icon-btn { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; opacity: 0.6; }
-  .del-icon-btn:hover { opacity: 1; }
-
-  .folder-row { display: flex; gap: 8px; }
-  .secondary-btn {
-    padding: 12px 14px;
-    border: none;
-    border-radius: 14px;
-    background: white;
-    color: #ff6b9d;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    font-size: 0.9rem;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .folder-block { margin-bottom: 18px; }
-  .folder-title { font-weight: 700; color: #b5537a; margin-bottom: 8px; font-size: 0.95rem; }
-  .link-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: white;
-    border-radius: 12px;
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    gap: 8px;
-  }
-  .link-item .link-info { overflow: hidden; }
-  .link-item a {
-    color: #333;
-    text-decoration: none;
-    font-size: 0.88rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: block;
-  }
-  .link-item .meta { font-size: 0.7rem; color: #999; margin-top: 2px; }
-
-  #tab-dates { position: relative; }
-  .hearts-bg {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-    z-index: 0;
-  }
-  .hearts-bg .heart {
-    position: absolute;
-    top: -10%;
-    animation-name: heart-fall;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-    filter: drop-shadow(0 2px 4px rgba(181, 83, 122, 0.15));
-  }
-  #dates-list { position: relative; z-index: 1; }
-  @keyframes heart-fall {
-    0% { transform: translate(0, -10vh) rotate(0deg) scale(0.7); opacity: 0; }
-    12% { opacity: 0.9; }
-    30% { transform: translate(var(--drift), 25vh) rotate(calc(var(--rotate) * 0.3)) scale(1.05); }
-    50% { transform: translate(calc(var(--drift) * -0.6), 50vh) rotate(calc(var(--rotate) * 0.6)) scale(0.9); }
-    70% { transform: translate(var(--drift), 75vh) rotate(calc(var(--rotate) * 0.85)) scale(1.1); }
-    88% { opacity: 0.6; }
-    100% { transform: translate(0, 110vh) rotate(var(--rotate)) scale(0.8); opacity: 0; }
-  }
-</style>
+<link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="card">
-    <h1>Us 💛</h1>
-    <p class="sub">little pings, across the distance</p>
+  <div id="hearts-bg" class="hearts-bg" aria-hidden="true"></div>
 
-    <div id="person-screen">
-      <p>Who are you?</p>
+  <div class="app">
+    <header class="brand">
+      <h1>Us</h1>
+      <p>little pings, across the distance</p>
+    </header>
+
+    <section id="person-screen" class="glass person-card">
+      <p>Who's holding this phone?</p>
       <div class="person-choices">
-        <button class="person-btn" data-person="me">It's me 💗</button>
-        <button class="person-btn" data-person="bae">It's bae 💛</button>
+        <button class="person-btn" data-person="me"><span>💗</span>I'm Vinita</button>
+        <button class="person-btn" data-person="bae"><span>💛</span>I'm Sharvin</button>
       </div>
-    </div>
+    </section>
 
-    <div id="main-screen" class="hidden">
-      <div id="who-am-i"></div>
-      <button id="enable-notifications">🔔 Enable notifications</button>
-
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="ping">💌 Ping</button>
-        <button class="tab-btn" data-tab="history">📜 History</button>
-        <button class="tab-btn" data-tab="dates">💛 Us</button>
-        <button class="tab-btn" data-tab="ask">❓ Ask</button>
-        <button class="tab-btn" data-tab="places">📍 Places</button>
+    <main id="main-screen" class="hidden">
+      <div class="topbar">
+        <div id="who-am-i" class="chip"></div>
+        <button id="enable-notifications" class="chip chip-btn">🔔 Enable notifications</button>
       </div>
 
-      <div id="tab-ping" class="tab-content active">
+      <section id="tab-ping" class="tab-content active">
         <div class="ping-grid">
-          <button class="ping-btn" data-type="eating">🍽️ Eating</button>
-          <button class="ping-btn" data-type="sleepy">😴 Sleepy</button>
-          <button class="ping-btn" data-type="miss">🥺 Miss you</button>
-          <button class="ping-btn" data-type="love">❤️ Love you</button>
-          <button class="ping-btn" data-type="awake">☀️ Good morning</button>
-          <button class="ping-btn" data-type="night">🌙 Goodnight</button>
+          <button class="ping-btn" data-type="eating"><span class="ping-icon">🍽️</span>Eating</button>
+          <button class="ping-btn" data-type="sleepy"><span class="ping-icon">😴</span>Sleepy</button>
+          <button class="ping-btn" data-type="miss"><span class="ping-icon">🥺</span>Miss you</button>
+          <button class="ping-btn" data-type="love"><span class="ping-icon">❤️</span>Love you</button>
+          <button class="ping-btn" data-type="awake"><span class="ping-icon">☀️</span>Good morning</button>
+          <button class="ping-btn" data-type="night"><span class="ping-icon">🌙</span>Goodnight</button>
         </div>
         <div class="custom-row">
-          <input id="custom-input" type="text" placeholder="Type your own message..." maxlength="200" />
-          <button id="custom-send">Send</button>
+          <input id="custom-input" type="text" placeholder="Write something sweet..." maxlength="200" />
+          <button id="custom-send" class="send-btn" aria-label="Send">➤</button>
         </div>
-      </div>
+      </section>
 
-      <div id="tab-history" class="tab-content">
+      <section id="tab-history" class="tab-content">
         <div id="history-list"></div>
-      </div>
+      </section>
 
-      <div id="tab-dates" class="tab-content">
-        <div id="hearts-bg" class="hearts-bg"></div>
-        <div class="dates-header">
-          <h2>Vinita &amp; Sharvin</h2>
-          <p>every second of us, counted</p>
-        </div>
+      <section id="tab-dates" class="tab-content">
         <div id="dates-list"></div>
-      </div>
+      </section>
 
-      <div id="tab-ask" class="tab-content">
-        <div class="stack-form">
-          <textarea id="question-input" class="text-input" maxlength="300" placeholder="Ask them something you want to know..."></textarea>
-          <button id="question-send" class="primary-btn">Ask</button>
+      <section id="tab-ask" class="tab-content">
+        <div class="glass form-card">
+          <textarea id="question-input" class="text-input" maxlength="300" placeholder="Ask something you've always wondered..."></textarea>
+          <button id="question-send" class="primary-btn">Ask 💭</button>
+          <p class="hint">If they don't answer, they'll get a gentle reminder 🔔</p>
         </div>
         <div id="questions-list"></div>
-      </div>
+      </section>
 
-      <div id="tab-places" class="tab-content">
-        <div class="stack-form">
+      <section id="tab-places" class="tab-content">
+        <div class="glass form-card">
           <div class="folder-row">
             <input id="place-folder" class="text-input" list="folder-options" placeholder="Folder (e.g. Eat, Visit)" maxlength="40" />
             <datalist id="folder-options"></datalist>
-            <button id="folder-create" class="secondary-btn" type="button">+ Folder</button>
+            <button id="folder-create" class="ghost-btn" type="button">+ Folder</button>
           </div>
           <input id="place-title" class="text-input" placeholder="Name (optional)" maxlength="100" />
           <input id="place-url" class="text-input" placeholder="Paste link here" />
-          <button id="place-send" class="primary-btn">Add place</button>
+          <button id="place-send" class="primary-btn">Add place 📍</button>
         </div>
         <div id="places-list"></div>
-      </div>
+      </section>
 
-      <div id="status"></div>
-    </div>
+      <section id="tab-meet" class="tab-content">
+        <div id="meet-hero"></div>
+        <div class="glass form-card">
+          <p id="event-form-title" class="form-title">Add a countdown</p>
+          <input id="event-title" class="text-input" placeholder="What are we waiting for? (e.g. Meet in KL)" maxlength="80" />
+          <input id="event-at" class="text-input" type="datetime-local" />
+          <div class="row">
+            <button id="event-save" class="primary-btn">Add countdown ✈️</button>
+            <button id="event-cancel" class="ghost-btn hidden" type="button">Cancel</button>
+          </div>
+        </div>
+        <div id="events-list"></div>
+      </section>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn active" data-tab="ping"><span>💌</span>Ping</button>
+        <button class="nav-btn" data-tab="history"><span>🕰️</span>History</button>
+        <button class="nav-btn" data-tab="dates"><span>💞</span>Us</button>
+        <button class="nav-btn" data-tab="ask"><span>💭</span>Ask</button>
+        <button class="nav-btn" data-tab="places"><span>📍</span>Places</button>
+        <button class="nav-btn" data-tab="meet"><span>✈️</span>Meet</button>
+      </nav>
+    </main>
   </div>
+
+  <div id="status" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/app.js"></script>
 </body>
